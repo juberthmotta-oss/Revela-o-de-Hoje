@@ -80,28 +80,37 @@ const useAudioPlayer = (audioBlob) => {
 
   const play = useCallback(() => {
     if (!audioBufferRef.current || isPlaying) return;
+    
+    const playAudio = () => {
+        sourceRef.current = AudioCTX.createBufferSource();
+        sourceRef.current.buffer = audioBufferRef.current;
+        sourceRef.current.connect(AudioCTX.destination);
 
-    sourceRef.current = AudioCTX.createBufferSource();
-    sourceRef.current.buffer = audioBufferRef.current;
-    sourceRef.current.connect(AudioCTX.destination);
+        const offset = currentTime;
+        startTimeRef.current = AudioCTX.currentTime - offset;
+        sourceRef.current.start(0, offset);
+        setIsPlaying(true);
 
-    const offset = currentTime;
-    startTimeRef.current = AudioCTX.currentTime - offset;
-    sourceRef.current.start(0, offset);
-    setIsPlaying(true);
+        sourceRef.current.onended = () => {
+            setIsPlaying(false);
+            if (timerRef.current) clearInterval(timerRef.current);
+            const elapsedTime = AudioCTX.currentTime - startTimeRef.current;
+            if (elapsedTime >= duration - 0.1) {
+                setCurrentTime(0);
+            }
+        };
 
-    sourceRef.current.onended = () => {
-        setIsPlaying(false);
-        if (timerRef.current) clearInterval(timerRef.current);
-        if (AudioCTX.currentTime - startTimeRef.current >= duration) {
-            setCurrentTime(0);
-        }
+        timerRef.current = setInterval(() => {
+            const elapsed = AudioCTX.currentTime - startTimeRef.current;
+            setCurrentTime(Math.min(elapsed, duration));
+        }, 100);
     };
 
-    timerRef.current = setInterval(() => {
-        const elapsed = AudioCTX.currentTime - startTimeRef.current;
-        setCurrentTime(Math.min(elapsed, duration));
-    }, 100);
+    if (AudioCTX.state === 'suspended') {
+        AudioCTX.resume().then(playAudio).catch(console.error);
+    } else {
+        playAudio();
+    }
   }, [isPlaying, currentTime, duration]);
 
   const pause = useCallback(() => {
